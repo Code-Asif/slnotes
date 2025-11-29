@@ -540,7 +540,12 @@ const MaterialDetailPage = () => {
     try {
       let recaptchaToken = '';
       if (executeRecaptcha) {
-        recaptchaToken = await executeRecaptcha('free_checkout');
+        try {
+          recaptchaToken = await executeRecaptcha('free_checkout');
+        } catch (recaptchaError) {
+          console.warn('reCAPTCHA execution failed, continuing without token:', recaptchaError);
+          // Continue without reCAPTCHA token - backend will handle gracefully
+        }
       }
 
       const response = await api.post('/checkout/free', {
@@ -588,7 +593,12 @@ const MaterialDetailPage = () => {
     try {
       let recaptchaToken = '';
       if (executeRecaptcha) {
-        recaptchaToken = await executeRecaptcha('paid_checkout');
+        try {
+          recaptchaToken = await executeRecaptcha('paid_checkout');
+        } catch (recaptchaError) {
+          console.warn('reCAPTCHA execution failed, continuing without token:', recaptchaError);
+          // Continue without reCAPTCHA token - backend will handle gracefully
+        }
       }
 
       // Create Razorpay order
@@ -630,7 +640,12 @@ const MaterialDetailPage = () => {
             setProcessing(true);
             let recaptchaToken = '';
             if (executeRecaptcha) {
-              recaptchaToken = await executeRecaptcha('verify_payment');
+              try {
+                recaptchaToken = await executeRecaptcha('verify_payment');
+              } catch (recaptchaError) {
+                console.warn('reCAPTCHA execution failed, continuing without token:', recaptchaError);
+                // Continue without reCAPTCHA token - backend will handle gracefully
+              }
             }
 
             const verifyResponse = await api.post('/checkout/verify', {
@@ -936,7 +951,7 @@ const MaterialDetailPage = () => {
                           <CardMedia
                             component="img"
                             height="200"
-                            image={`/api/materials/${related._id}/preview`}
+                            image={`${import.meta.env.VITE_API_URL || '/api'}/materials/${related._id}/preview`}
                             alt={related.title}
                             sx={{ objectFit: 'cover' }}
                           />

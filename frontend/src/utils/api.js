@@ -2,7 +2,14 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 
 // Use relative path in development (works with Vite proxy) or full URL in production
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+// Ensure API_URL always ends with /api
+let API_URL = import.meta.env.VITE_API_URL || '/api';
+
+// If VITE_API_URL is set but doesn't end with /api, append it
+if (API_URL && !API_URL.endsWith('/api')) {
+  // Remove trailing slash if present, then add /api
+  API_URL = API_URL.replace(/\/$/, '') + '/api';
+}
 
 const api = axios.create({
   baseURL: API_URL,
