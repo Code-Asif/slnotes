@@ -214,9 +214,13 @@ const Navbar = () => {
             : `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
           backdropFilter: 'blur(10px)',
           borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+          minHeight: { xs: 64, sm: 70 }, // Increased height for small devices
         }}
       >
-        <Toolbar sx={{ px: { xs: 2, md: 3 } }}>
+        <Toolbar sx={{ 
+          px: { xs: 2, md: 3 },
+          minHeight: { xs: 64, sm: 70 } // Increased height for small devices
+        }}>
           <Box
             component={Link}
             to="/"
@@ -225,7 +229,7 @@ const Navbar = () => {
               alignItems: 'center',
               textDecoration: 'none',
               color: 'inherit',
-              mr: { xs: 1, md: 3 },
+              mr: { xs: 1.5, md: 3 },
             }}
           >
             <Box
@@ -233,9 +237,9 @@ const Navbar = () => {
               src={logoImage}
               alt="MaterialPro Logo"
               sx={{
-                height: { xs: 35, md: 45 },
+                height: { xs: 40, sm: 45, md: 50 }, // Increased size for small devices
                 width: 'auto',
-                mr: 1.5,
+                mr: { xs: 1, sm: 1.5 },
                 objectFit: 'contain',
                 transition: 'transform 0.3s',
                 '&:hover': {
@@ -246,14 +250,16 @@ const Navbar = () => {
             <Typography
               variant="h6"
               sx={{
-                display: { xs: 'none', sm: 'block' },
+                display: 'block', // Always show on all devices including mobile
                 fontWeight: 700,
+                fontSize: { xs: '1rem', sm: '1.25rem', md: '1.5rem' }, // Responsive font size
                 background: mode === 'dark' 
                   ? 'linear-gradient(45deg, #fff 30%, #e0e0e0 90%)'
                   : 'linear-gradient(45deg, #fff 30%, #f5f5f5 90%)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
+                whiteSpace: 'nowrap',
               }}
             >
               SalmanNotes
