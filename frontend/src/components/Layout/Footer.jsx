@@ -33,7 +33,7 @@ const Footer = () => {
             Premium Educational Materials Platform
           </Typography>
           <Typography variant="body2" align="center">
-            Made with ❤️ by <a style={{ color: 'black', textDecoration: 'none', fontWeight: 'bold' }} href="https://mdafzal.netlify.app" target="_blank" rel="noopener noreferrer">Md Afzal</a>
+            Made with ❤️ by <strong style={{ color: 'black', textDecoration: 'none', fontWeight: 'bold' }}>Md Afzal</strong>
           </Typography>
           <MuiLink
             component={Link}
