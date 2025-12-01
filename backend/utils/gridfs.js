@@ -85,24 +85,37 @@ export const deleteFromGridFS = (fileId) => {
     const bucket = getGridFSBucket();
     const normalisedId = normaliseFileId(fileId);
 
-    bucket.delete(normalisedId, (error) => {
-      if (!error) {
-        return resolve();
-      }
+    // Guard against both sync and async errors from the driver
+    try {
+      bucket.delete(normalisedId, (error) => {
+        if (!error) {
+          return resolve();
+        }
 
-      // If the file is already missing, log and treat as a successful delete
+        // If the file is already missing, log and treat as a successful delete
+        const message = error?.message || '';
+        if (
+          error?.name === 'MongoRuntimeError' &&
+          message.includes('File not found for id')
+        ) {
+          logger.warn(`GridFS: delete called for non-existent file id ${normalisedId} – ignoring.`);
+          return resolve();
+        }
+
+        // For any other kind of error, bubble it up
+        return reject(error);
+      });
+    } catch (error) {
       const message = error?.message || '';
       if (
         error?.name === 'MongoRuntimeError' &&
         message.includes('File not found for id')
       ) {
-        logger.warn(`GridFS: delete called for non-existent file id ${normalisedId} – ignoring.`);
+        logger.warn(`GridFS: synchronous delete error for non-existent file id ${normalisedId} – ignoring.`);
         return resolve();
       }
-
-      // For any other kind of error, bubble it up
       return reject(error);
-    });
+    }
   });
 };
 
