@@ -478,22 +478,27 @@ router.delete('/materials/:id', authenticateAdmin, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Material not found' });
     }
 
-    // Delete all files from GridFS (current + versions)
+    // Collect all associated file IDs (current PDF, preview, cover, and older versions)
+    // We use (material.versions || []) to prevent crashing if versions is undefined
     const fileIds = [
       material.pdfFileId,
       material.previewImageId,
       material.coverImageId,
-      ...material.versions.map(v => v.pdfFileId)
-    ].filter(Boolean);
+      ...(material.versions || []).map(v => v.pdfFileId)
+    ].filter(Boolean); // .filter(Boolean) removes any null or undefined values
 
+    // Iterate through all files and attempt to delete them from GridFS
     for (const fileId of fileIds) {
       try {
         await deleteFromGridFS(fileId);
       } catch (error) {
-        logger.error('Error deleting file from GridFS:', error);
+        // IMPROVEMENT: We catch errors here specifically to ensure the loop continues.
+        // If a file is missing in GridFS, we log it but do NOT stop the process.
+        logger.warn(`Warning: Failed to delete GridFS file ${fileId} (likely already missing). Proceeding with document deletion. Error: ${error.message}`);
       }
     }
 
+    // Now that files are handled (deleted or skipped), delete the metadata document
     await Material.findByIdAndDelete(req.params.id);
 
     res.json({ success: true, message: 'Material deleted successfully' });
