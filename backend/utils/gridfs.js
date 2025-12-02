@@ -80,43 +80,38 @@ export const getFileMetadata = async (fileId) => {
 };
 
 // Delete file from GridFS
-export const deleteFromGridFS = (fileId) => {
-  return new Promise((resolve, reject) => {
-    const bucket = getGridFSBucket();
-    const normalisedId = normaliseFileId(fileId);
+export const deleteFromGridFS = async (fileId) => {
+  // 1. Return immediately if no ID provided
+  if (!fileId) return;
 
-    // Guard against both sync and async errors from the driver
-    try {
-      bucket.delete(normalisedId, (error) => {
-        if (!error) {
-          return resolve();
-        }
+  const bucket = getGridFSBucket();
+  const normalisedId = normaliseFileId(fileId);
 
-        // If the file is already missing, log and treat as a successful delete
-        const message = error?.message || '';
-        if (
-          error?.name === 'MongoRuntimeError' &&
-          message.includes('File not found for id')
-        ) {
-          logger.warn(`GridFS: delete called for non-existent file id ${normalisedId} – ignoring.`);
-          return resolve();
-        }
-
-        // For any other kind of error, bubble it up
-        return reject(error);
-      });
-    } catch (error) {
-      const message = error?.message || '';
-      if (
-        error?.name === 'MongoRuntimeError' &&
-        message.includes('File not found for id')
-      ) {
-        logger.warn(`GridFS: synchronous delete error for non-existent file id ${normalisedId} – ignoring.`);
-        return resolve();
-      }
-      return reject(error);
+  try {
+    // 2. Use await instead of a callback. 
+    // This allows the catch block to correctly handle the runtime error.
+    await bucket.delete(normalisedId);
+    logger.info(`GridFS: Successfully deleted file ${normalisedId}`);
+    
+  } catch (error) {
+    // 3. Check specifically for the "File not found" error
+    const message = error.message || '';
+    
+    if (
+      message.includes('File not found for id') || 
+      message.includes('FileNotFound') ||
+      error.code === 'ENOENT'
+    ) {
+      // 4. Swallow this error. 
+      // If the file is missing, our job (deleting it) is effectively done.
+      logger.warn(`GridFS: File ${normalisedId} not found. Skipping delete.`);
+      return; 
     }
-  });
+
+    // 5. If it's a different error (like DB connection lost), re-throw it
+    logger.error(`GridFS: Error deleting file ${normalisedId}`, error);
+    throw error;
+  }
 };
 
 // Check if file exists
