@@ -2,7 +2,7 @@ import { Container, Typography, Box, Paper, Grid, useTheme, Avatar, Divider } fr
 import { Helmet } from 'react-helmet-async';
 import PublicLayout from '../components/Layout/PublicLayout';
 import { motion } from 'framer-motion';
-import ownerImage from '../images/owner.jpg';
+import ownerImage from '../images/Owner.jpg';
 
 const AboutPage = () => {
   const theme = useTheme();
