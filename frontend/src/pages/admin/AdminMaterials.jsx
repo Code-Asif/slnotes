@@ -492,7 +492,7 @@ const AdminMaterials = () => {
                       setFormData((prev) => ({ ...prev, category: e.target.value }))
                     }
                   >
-                    {['Class', 'JEE', 'NEET', 'Foundation', 'Olympiad'].map((cat) => (
+                    {['Class', 'JEE', 'NEET', 'Foundation', 'Olympiad', 'Others'].map((cat) => (
                       <MenuItem key={cat} value={cat}>
                         {cat}
                       </MenuItem>
