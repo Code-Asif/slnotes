@@ -161,6 +161,8 @@ const AdminMaterials = () => {
     return Object.keys(errors).length === 0;
   };
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -168,6 +170,8 @@ const AdminMaterials = () => {
       toast.error('Please fix the form errors');
       return;
     }
+    
+    setIsSubmitting(true);
 
     const form = new FormData();
     Object.keys(formData).forEach((key) => {
@@ -222,11 +226,13 @@ const AdminMaterials = () => {
         toast.success('Material created successfully');
       }
       handleCloseDialog();
-      fetchMaterials();
+      await fetchMaterials();
     } catch (error) {
       console.error('Error saving material:', error);
       const errorMessage = error.response?.data?.message || 'Failed to save material';
       toast.error(errorMessage);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -492,7 +498,7 @@ const AdminMaterials = () => {
                       setFormData((prev) => ({ ...prev, category: e.target.value }))
                     }
                   >
-                    {['Class', 'JEE', 'NEET', 'Foundation', 'Olympiad'].map((cat) => (
+                    {['Class', 'JEE', 'NEET', 'Foundation', 'Olympiad', 'Others'].map((cat) => (
                       <MenuItem key={cat} value={cat}>
                         {cat}
                       </MenuItem>
@@ -589,8 +595,16 @@ const AdminMaterials = () => {
             </DialogContent>
             <DialogActions>
               <Button onClick={handleCloseDialog}>Cancel</Button>
-              <Button type="submit" variant="contained">
-                {editingMaterial ? 'Update' : 'Create'}
+              <Button 
+                type="submit" 
+                variant="contained" 
+                color="primary"
+                disabled={isSubmitting}
+                startIcon={isSubmitting ? <CircularProgress size={20} color="inherit" /> : null}
+              >
+                {editingMaterial ? 
+                  (isSubmitting ? 'Updating...' : 'Update Material') : 
+                  (isSubmitting ? 'Creating...' : 'Create Material')}
               </Button>
             </DialogActions>
           </form>

@@ -561,17 +561,25 @@ const MaterialDetailPage = () => {
         return;
       }
 
-      // Download the file - fix double /api issue
+      // Handle the download URL - use the full URL if provided, otherwise construct it
       let downloadUrl = response.downloadUrl;
-      if (!downloadUrl.startsWith('http')) {
-        const apiBase = import.meta.env.VITE_API_URL || '/api';
-        // Remove leading /api if downloadUrl already starts with /api
-        if (downloadUrl.startsWith('/api')) {
-          downloadUrl = downloadUrl.substring(4); // Remove '/api'
-        }
-        downloadUrl = `${apiBase}${downloadUrl}`;
+      
+      if (!downloadUrl) {
+        toast.error('Download URL not found');
+        return;
       }
-      window.open(downloadUrl, '_blank');
+      
+      // If it's not a full URL, construct it using the API base URL
+      if (!downloadUrl.match(/^https?:\/\//)) {
+        const apiBase = import.meta.env.VITE_API_URL || window.location.origin;
+        // Ensure we don't have double slashes
+        const cleanPath = downloadUrl.startsWith('/') ? downloadUrl.substring(1) : downloadUrl;
+        downloadUrl = `${apiBase.replace(/\/$/, '')}/${cleanPath}`;
+      }
+      
+      // Open in new tab for better UX
+      const newWindow = window.open('', '_blank');
+      newWindow.location.href = downloadUrl;
       
       toast.success('Download started!');
       setCheckoutOpen(false);
