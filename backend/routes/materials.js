@@ -170,6 +170,16 @@ router.get('/:id/preview', async (req, res) => {
       return res.send(transparentPng);
     }
 
+    // Get file metadata for content type
+    const fileMetadata = await getFileMetadata(fileId);
+    const contentType = fileMetadata?.metadata?.mimeType || fileMetadata?.contentType || 'image/png';
+    
+    // Set appropriate headers
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=31536000');
+    res.setHeader('Content-Disposition', 'inline');
+    
+    // Stream the file
     const downloadStream = downloadFromGridFS(fileId);
     
     downloadStream.on('error', (error) => {
@@ -182,9 +192,7 @@ router.get('/:id/preview', async (req, res) => {
         res.send(transparentPng);
       }
     });
-
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Cache-Control', 'public, max-age=31536000');
+    
     downloadStream.pipe(res);
   } catch (error) {
     logger.error('Error fetching preview:', error);

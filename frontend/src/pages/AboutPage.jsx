@@ -209,7 +209,7 @@ const AboutPage = () => {
                 Email: coachingwork2409@gmail.com
               </Typography>
               <Typography variant="body1" color="primary" sx={{ mt: 1, fontWeight: 500 }}>
-                Phone: +91 8877241912
+                Phone: +91 72600 23491
               </Typography>
             </Box>
           </Box>

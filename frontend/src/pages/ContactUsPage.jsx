@@ -96,8 +96,8 @@ const ContactUsPage = () => {
     { 
       icon: <PhoneIcon color="primary" fontSize="large" />, 
       title: 'Call Us',
-      text: '+91 9798425043',
-      link: 'tel:+919798425043'
+      text: '+91 72600 23491',
+      link: 'tel:+9172600 23491'
     },
     { 
       icon: <LocationOnIcon color="primary" fontSize="large" />, 
