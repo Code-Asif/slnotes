@@ -493,25 +493,28 @@ router.delete('/materials/:id', authenticateAdmin, async (req, res) => {
       material.pdfFileId,
       material.previewImageId,
       material.coverImageId,
-      ...material.versions.map(v => v.pdfFileId)
+      ...(material.versions || []).map(v => v.pdfFileId)
     ].filter(Boolean);
 
     logger.info(`Material has ${fileIds.length} files to delete`);
 
-    // Delete all GridFS files - continue even if some fail
-    const deletePromises = fileIds.map(fileId => 
-      deleteFromGridFS(fileId)
-        .then(() => {
+    // Delete all GridFS files - NO AWAIT, just fire and forget with logging
+    // This prevents crashes if any file is missing
+    const deleteResults = [];
+    for (const fileId of fileIds) {
+      try {
+        const result = await deleteFromGridFS(fileId);
+        deleteResults.push(result);
+        if (result.success) {
           logger.info(`Successfully deleted file: ${fileId}`);
-        })
-        .catch(error => {
-          logger.error(`Error deleting file ${fileId}:`, error);
-          // Continue deletion process even if individual files fail
-        })
-    );
-
-    // Wait for all deletions to complete
-    await Promise.all(deletePromises);
+        } else {
+          logger.warn(`Failed to delete file ${fileId}: ${result.error}`);
+        }
+      } catch (error) {
+        logger.error(`Error deleting file ${fileId}:`, error?.message);
+        // Continue deletion process even if individual files fail
+      }
+    }
 
     // Delete the material document from database
     const deleteResult = await Material.findByIdAndDelete(materialId);
@@ -521,7 +524,13 @@ router.delete('/materials/:id', authenticateAdmin, async (req, res) => {
     }
 
     logger.info(`Successfully deleted material: ${materialId}`);
-    res.json({ success: true, message: 'Material deleted successfully' });
+    logger.debug(`Delete results: ${JSON.stringify(deleteResults)}`);
+    
+    res.json({ 
+      success: true, 
+      message: 'Material deleted successfully',
+      filesDeleted: deleteResults.length 
+    });
   } catch (error) {
     logger.error('Error deleting material:', error);
     res.status(500).json({ success: false, message: 'Error deleting material: ' + error.message });

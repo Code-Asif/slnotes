@@ -1,5 +1,8 @@
 # Proxy API requests to the backend
 /api/*  https://slnotes.onrender.com/api/:splat  200
 
-# SPA fallback
+# Special handling for downloads - direct passthrough
+/download/*  https://slnotes.onrender.com/download/:splat  200
+
+# SPA fallback - must be last
 /*    /index.html   200

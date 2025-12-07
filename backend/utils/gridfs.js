@@ -38,29 +38,64 @@ const normaliseFileId = (fileId) => {
   return fileId;
 };
 
-// Upload file to GridFS
+// Upload file to GridFS with validation
 export const uploadToGridFS = (fileBuffer, filename, metadata = {}) => {
-  return new Promise((resolve, reject) => {
-    const bucket = getGridFSBucket();
-    const uniqueFilename = `${uuidv4()}-${filename}`;
-    const readableStream = Readable.from(fileBuffer);
-    
-    const uploadStream = bucket.openUploadStream(uniqueFilename, {
-      metadata: {
-        originalName: filename,
-        ...metadata
-      }
-    });
+  return new Promise(async (resolve, reject) => {
+    try {
+      const bucket = getGridFSBucket();
+      const uniqueFilename = `${uuidv4()}-${filename}`;
+      const readableStream = Readable.from(fileBuffer);
+      let uploadId = null;
+      
+      const uploadStream = bucket.openUploadStream(uniqueFilename, {
+        metadata: {
+          originalName: filename,
+          uploadedAt: new Date(),
+          ...metadata
+        }
+      });
 
-    readableStream.pipe(uploadStream);
+      readableStream.pipe(uploadStream);
 
-    uploadStream.on('finish', () => {
-      resolve(uploadStream.id);
-    });
+      uploadStream.on('finish', async () => {
+        uploadId = uploadStream.id;
+        logger.info(`GridFS: file uploaded successfully - ${uploadId} (${filename})`);
+        
+        // Verify file actually exists in GridFS
+        try {
+          const filesCollection = bucket.bucket.collectionName === 'materials' ? 
+            mongoose.connection.db.collection('materials.files') :
+            mongoose.connection.db.collection('fs.files');
+          
+          const fileExists = await filesCollection.findOne({ _id: uploadId });
+          
+          if (!fileExists) {
+            logger.error(`GridFS: file verification failed - file not found after upload - ${uploadId}`);
+            return reject(new Error('File upload verification failed - file not found'));
+          }
+          
+          logger.info(`GridFS: file verification passed - ${uploadId}`);
+          resolve(uploadId);
+        } catch (verifyError) {
+          logger.warn(`GridFS: file verification check failed (will continue): ${verifyError?.message}`);
+          // Still resolve the upload since the file was acknowledged by GridFS
+          resolve(uploadId);
+        }
+      });
 
-    uploadStream.on('error', (error) => {
+      uploadStream.on('error', (error) => {
+        logger.error(`GridFS: upload stream error - ${filename}:`, error?.message);
+        reject(error);
+      });
+
+      readableStream.on('error', (error) => {
+        logger.error(`GridFS: read stream error - ${filename}:`, error?.message);
+        reject(error);
+      });
+    } catch (error) {
+      logger.error(`GridFS: upload initialization error - ${filename}:`, error?.message);
       reject(error);
-    });
+    }
   });
 };
 
@@ -79,58 +114,51 @@ export const getFileMetadata = async (fileId) => {
   return files[0] || null;
 };
 
-// Delete file from GridFS with comprehensive error handling
-export const deleteFromGridFS = (fileId) => {
-  return new Promise((resolve, reject) => {
-    // Silently resolve if fileId is null/undefined
-    if (!fileId) {
-      return resolve();
+// Delete file from GridFS - using direct MongoDB deletion instead of GridFS callback
+export const deleteFromGridFS = async (fileId) => {
+  // Silently return if fileId is null/undefined
+  if (!fileId) {
+    return { success: true, skipped: true };
+  }
+
+  try {
+    const db = mongoose.connection.db;
+    const normalisedId = normaliseFileId(fileId);
+    
+    if (!db) {
+      logger.error('GridFS: database connection not available');
+      return { success: false, error: 'Database not connected' };
     }
 
+    // Get the files collection directly
+    const filesCollection = db.collection('materials.files');
+    const chunksCollection = db.collection('materials.chunks');
+
+    // Try to delete the file and chunks - don't throw on missing files
     try {
-      const bucket = getGridFSBucket();
-      const normalisedId = normaliseFileId(fileId);
-
-      // Guard against both sync and async errors from the driver
-      try {
-        bucket.delete(normalisedId, (error) => {
-          if (!error) {
-            logger.info(`GridFS: successfully deleted file ${normalisedId}`);
-            return resolve();
-          }
-
-          // If the file is already missing, log and treat as a successful delete
-          const message = error?.message || '';
-          if (
-            error?.name === 'MongoRuntimeError' &&
-            (message.includes('File not found for id') || message.includes('no such file or directory'))
-          ) {
-            logger.warn(`GridFS: file not found (already deleted or doesn't exist) - ${normalisedId}`);
-            return resolve();
-          }
-
-          // Log other errors but still resolve to prevent cascade failures
-          logger.error(`GridFS: error deleting file ${normalisedId}:`, error);
-          return resolve();
-        });
-      } catch (syncError) {
-        const message = syncError?.message || '';
-        if (
-          syncError?.name === 'MongoRuntimeError' &&
-          (message.includes('File not found for id') || message.includes('no such file or directory'))
-        ) {
-          logger.warn(`GridFS: sync error - file not found - ${normalisedId}`);
-          return resolve();
-        }
-        logger.error(`GridFS: sync error deleting file ${normalisedId}:`, syncError);
-        return resolve();
+      // Delete file document
+      const fileDeleteResult = await filesCollection.deleteOne({ _id: normalisedId });
+      
+      // Delete associated chunks
+      const chunksDeleteResult = await chunksCollection.deleteMany({ files_id: normalisedId });
+      
+      if (fileDeleteResult.deletedCount > 0) {
+        logger.info(`GridFS: successfully deleted file ${normalisedId}`);
+        return { success: true, deleted: true };
+      } else {
+        logger.warn(`GridFS: file not found (already deleted or doesn't exist) - ${normalisedId}`);
+        return { success: true, notFound: true };
       }
-    } catch (error) {
-      logger.error(`GridFS: delete operation failed for file:`, error);
-      // Resolve instead of rejecting to prevent cascade failures
-      resolve();
+    } catch (deleteError) {
+      logger.error(`GridFS: error during file deletion ${normalisedId}:`, deleteError?.message);
+      // Even if there's an error, don't reject - just log it
+      return { success: false, error: deleteError?.message };
     }
-  });
+  } catch (error) {
+    logger.error(`GridFS: delete operation failed:`, error?.message);
+    // Always return success to prevent cascade failures
+    return { success: false, error: error?.message };
+  }
 };
 
 // Check if file exists
