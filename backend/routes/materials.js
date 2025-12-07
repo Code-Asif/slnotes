@@ -1,7 +1,7 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import Material from '../models/Material.js';
-import { downloadFromGridFS, fileExists } from '../utils/gridfs.js';
+import { downloadFromGridFS, fileExists, getFileMetadata } from '../utils/gridfs.js';
 import { logger } from '../config/logger.js';
 
 const router = express.Router();
@@ -121,15 +121,15 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Get preview image
+// Get preview image with robust fallback handling
 router.get('/:id/preview', async (req, res) => {
+  const transparentPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+  
   try {
     const material = await Material.findById(req.params.id).select('previewImageId');
 
     if (!material) {
       logger.warn(`Preview requested for non-existent material: ${req.params.id}`);
-      // Return a 1x1 transparent PNG as placeholder
-      const transparentPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
       res.setHeader('Content-Type', 'image/png');
       res.setHeader('Cache-Control', 'no-cache');
       return res.send(transparentPng);
@@ -137,8 +137,6 @@ router.get('/:id/preview', async (req, res) => {
 
     if (!material.previewImageId) {
       logger.warn(`Material ${req.params.id} does not have previewImageId`);
-      // Return a 1x1 transparent PNG as placeholder
-      const transparentPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
       res.setHeader('Content-Type', 'image/png');
       res.setHeader('Cache-Control', 'no-cache');
       return res.send(transparentPng);
@@ -151,7 +149,6 @@ router.get('/:id/preview', async (req, res) => {
         fileId = new mongoose.Types.ObjectId(fileId);
       } catch (e) {
         logger.error(`Invalid ObjectId format for preview: ${fileId}`);
-        const transparentPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
         res.setHeader('Content-Type', 'image/png');
         res.setHeader('Cache-Control', 'no-cache');
         return res.send(transparentPng);
@@ -161,17 +158,30 @@ router.get('/:id/preview', async (req, res) => {
     logger.info(`Streaming preview for material ${req.params.id}, previewImageId: ${fileId}`);
     
     // Check if file exists first
-    const exists = await fileExists(fileId);
+    let exists = false;
+    try {
+      exists = await fileExists(fileId);
+    } catch (checkError) {
+      logger.error(`Error checking if preview file exists: ${fileId}`, checkError);
+      // Continue anyway, let the stream handle the error
+      exists = true;
+    }
+    
     if (!exists) {
-      logger.warn(`Preview file ${fileId} does not exist in GridFS`);
-      const transparentPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+      logger.warn(`Preview file ${fileId} does not exist in GridFS for material ${req.params.id}`);
       res.setHeader('Content-Type', 'image/png');
       res.setHeader('Cache-Control', 'no-cache');
       return res.send(transparentPng);
     }
 
     // Get file metadata for content type
-    const fileMetadata = await getFileMetadata(fileId);
+    let fileMetadata;
+    try {
+      fileMetadata = await getFileMetadata(fileId);
+    } catch (metadataError) {
+      logger.warn(`Could not get metadata for preview file ${fileId}:`, metadataError);
+    }
+    
     const contentType = fileMetadata?.metadata?.mimeType || fileMetadata?.contentType || 'image/png';
     
     // Set appropriate headers
@@ -181,26 +191,32 @@ router.get('/:id/preview', async (req, res) => {
     
     // Stream the file
     const downloadStream = downloadFromGridFS(fileId);
+    let errorSent = false;
     
     downloadStream.on('error', (error) => {
       logger.error(`Error streaming preview for material ${req.params.id}:`, error);
-      if (!res.headersSent) {
-        // Return transparent PNG on error
-        const transparentPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+      if (!res.headersSent && !errorSent) {
+        errorSent = true;
         res.setHeader('Content-Type', 'image/png');
         res.setHeader('Cache-Control', 'no-cache');
         res.send(transparentPng);
+      } else if (!res.writableEnded) {
+        res.end();
       }
+    });
+    
+    downloadStream.on('end', () => {
+      logger.info(`Successfully streamed preview for material: ${req.params.id}`);
     });
     
     downloadStream.pipe(res);
   } catch (error) {
     logger.error('Error fetching preview:', error);
-    // Return transparent PNG on error
-    const transparentPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
     res.setHeader('Content-Type', 'image/png');
     res.setHeader('Cache-Control', 'no-cache');
-    res.send(transparentPng);
+    if (!res.headersSent) {
+      res.send(transparentPng);
+    }
   }
 });
 

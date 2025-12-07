@@ -79,42 +79,56 @@ export const getFileMetadata = async (fileId) => {
   return files[0] || null;
 };
 
-// Delete file from GridFS
+// Delete file from GridFS with comprehensive error handling
 export const deleteFromGridFS = (fileId) => {
   return new Promise((resolve, reject) => {
-    const bucket = getGridFSBucket();
-    const normalisedId = normaliseFileId(fileId);
+    // Silently resolve if fileId is null/undefined
+    if (!fileId) {
+      return resolve();
+    }
 
-    // Guard against both sync and async errors from the driver
     try {
-      bucket.delete(normalisedId, (error) => {
-        if (!error) {
-          return resolve();
-        }
+      const bucket = getGridFSBucket();
+      const normalisedId = normaliseFileId(fileId);
 
-        // If the file is already missing, log and treat as a successful delete
-        const message = error?.message || '';
+      // Guard against both sync and async errors from the driver
+      try {
+        bucket.delete(normalisedId, (error) => {
+          if (!error) {
+            logger.info(`GridFS: successfully deleted file ${normalisedId}`);
+            return resolve();
+          }
+
+          // If the file is already missing, log and treat as a successful delete
+          const message = error?.message || '';
+          if (
+            error?.name === 'MongoRuntimeError' &&
+            (message.includes('File not found for id') || message.includes('no such file or directory'))
+          ) {
+            logger.warn(`GridFS: file not found (already deleted or doesn't exist) - ${normalisedId}`);
+            return resolve();
+          }
+
+          // Log other errors but still resolve to prevent cascade failures
+          logger.error(`GridFS: error deleting file ${normalisedId}:`, error);
+          return resolve();
+        });
+      } catch (syncError) {
+        const message = syncError?.message || '';
         if (
-          error?.name === 'MongoRuntimeError' &&
-          message.includes('File not found for id')
+          syncError?.name === 'MongoRuntimeError' &&
+          (message.includes('File not found for id') || message.includes('no such file or directory'))
         ) {
-          logger.warn(`GridFS: delete called for non-existent file id ${normalisedId} – ignoring.`);
+          logger.warn(`GridFS: sync error - file not found - ${normalisedId}`);
           return resolve();
         }
-
-        // For any other kind of error, bubble it up
-        return reject(error);
-      });
-    } catch (error) {
-      const message = error?.message || '';
-      if (
-        error?.name === 'MongoRuntimeError' &&
-        message.includes('File not found for id')
-      ) {
-        logger.warn(`GridFS: synchronous delete error for non-existent file id ${normalisedId} – ignoring.`);
+        logger.error(`GridFS: sync error deleting file ${normalisedId}:`, syncError);
         return resolve();
       }
-      return reject(error);
+    } catch (error) {
+      logger.error(`GridFS: delete operation failed for file:`, error);
+      // Resolve instead of rejecting to prevent cascade failures
+      resolve();
     }
   });
 };

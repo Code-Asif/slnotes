@@ -1,6 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 import Razorpay from 'razorpay';
 import Material from '../models/Material.js';
 import Order from '../models/Order.js';
@@ -469,16 +470,25 @@ router.put('/materials/:id', authenticateAdmin, upload.fields([
   }
 });
 
-// Delete material
+// Delete material with comprehensive error handling
 router.delete('/materials/:id', authenticateAdmin, async (req, res) => {
   try {
-    const material = await Material.findById(req.params.id);
+    const materialId = req.params.id;
+    
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(materialId)) {
+      return res.status(400).json({ success: false, message: 'Invalid material ID' });
+    }
+
+    const material = await Material.findById(materialId);
 
     if (!material) {
       return res.status(404).json({ success: false, message: 'Material not found' });
     }
 
-    // Delete all files from GridFS (current + versions)
+    logger.info(`Starting deletion of material: ${materialId}`);
+
+    // Collect all file IDs to delete
     const fileIds = [
       material.pdfFileId,
       material.previewImageId,
@@ -486,20 +496,35 @@ router.delete('/materials/:id', authenticateAdmin, async (req, res) => {
       ...material.versions.map(v => v.pdfFileId)
     ].filter(Boolean);
 
-    for (const fileId of fileIds) {
-      try {
-        await deleteFromGridFS(fileId);
-      } catch (error) {
-        logger.error('Error deleting file from GridFS:', error);
-      }
+    logger.info(`Material has ${fileIds.length} files to delete`);
+
+    // Delete all GridFS files - continue even if some fail
+    const deletePromises = fileIds.map(fileId => 
+      deleteFromGridFS(fileId)
+        .then(() => {
+          logger.info(`Successfully deleted file: ${fileId}`);
+        })
+        .catch(error => {
+          logger.error(`Error deleting file ${fileId}:`, error);
+          // Continue deletion process even if individual files fail
+        })
+    );
+
+    // Wait for all deletions to complete
+    await Promise.all(deletePromises);
+
+    // Delete the material document from database
+    const deleteResult = await Material.findByIdAndDelete(materialId);
+    
+    if (!deleteResult) {
+      return res.status(404).json({ success: false, message: 'Material not found for deletion' });
     }
 
-    await Material.findByIdAndDelete(req.params.id);
-
+    logger.info(`Successfully deleted material: ${materialId}`);
     res.json({ success: true, message: 'Material deleted successfully' });
   } catch (error) {
     logger.error('Error deleting material:', error);
-    res.status(500).json({ success: false, message: 'Error deleting material' });
+    res.status(500).json({ success: false, message: 'Error deleting material: ' + error.message });
   }
 });
 
