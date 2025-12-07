@@ -52,9 +52,14 @@ router.post('/free', checkoutLimiter, verifyRecaptcha, async (req, res) => {
     material.downloadCount += 1;
     await material.save();
 
+    // Return full URL for production
+    const baseUrl = process.env.NODE_ENV === 'production' 
+      ? process.env.FRONTEND_URL || 'https://your-frontend-domain.com'
+      : '';
+
     res.json({
       success: true,
-      downloadUrl: `/api/download/free/${materialId}`,
+      downloadUrl: `${baseUrl}/api/download/free/${materialId}`,
       message: 'Free material downloaded successfully'
     });
   } catch (error) {
@@ -182,26 +187,28 @@ router.post('/verify', checkoutLimiter, verifyRecaptcha, async (req, res) => {
       status: 'captured'
     });
 
-    // Record download
+    // Create a download record for the order
     await Download.create({
-      material: materialId,
-      email,
-      mobile,
-      isFree: false,
-      order: order._id
+      order: order._id,
+      material: material._id,
+      email: order.buyerEmail,
+      mobile: order.buyerMobile,
+      isFree: false
     });
 
-    // Increment download count
-    material.downloadCount += 1;
-    await material.save();
+    // Get base URL for production
+    const baseUrl = process.env.NODE_ENV === 'production' 
+      ? process.env.FRONTEND_URL || 'https://your-frontend-domain.com'
+      : '';
 
+    // Send success response with download URL
     res.json({
       success: true,
       order: {
         id: order._id,
         materialTitle: material.title
       },
-      downloadUrl: `/api/download/paid/${order._id}`,
+      downloadUrl: `${baseUrl}/api/download/paid/${order._id}`,
       message: 'Payment verified successfully'
     });
   } catch (error) {

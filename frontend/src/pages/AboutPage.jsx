@@ -2,7 +2,7 @@ import { Container, Typography, Box, Paper, Grid, useTheme, Avatar, Divider } fr
 import { Helmet } from 'react-helmet-async';
 import PublicLayout from '../components/Layout/PublicLayout';
 import { motion } from 'framer-motion';
-import ownerImage from '../images/owner.png';
+import ownerImage from '../images/Owner.jpg';
 
 const AboutPage = () => {
   const theme = useTheme();
@@ -209,7 +209,7 @@ const AboutPage = () => {
                 Email: coachingwork2409@gmail.com
               </Typography>
               <Typography variant="body1" color="primary" sx={{ mt: 1, fontWeight: 500 }}>
-                Phone: +91 8877241912
+                Phone: +91 72600 23491
               </Typography>
             </Box>
           </Box>

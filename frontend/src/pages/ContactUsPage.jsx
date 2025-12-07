@@ -96,13 +96,13 @@ const ContactUsPage = () => {
     { 
       icon: <PhoneIcon color="primary" fontSize="large" />, 
       title: 'Call Us',
-      text: '+91 8877241912',
-      link: 'tel:+918877241912'
+      text: '+91 72600 23491',
+      link: 'tel:+9172600 23491'
     },
     { 
       icon: <LocationOnIcon color="primary" fontSize="large" />, 
       title: 'Location',
-      text: 'Neha Challenge Coaching Center, Chhaurahi, Bihar, India',
+      text: 'Rajkot, Gujarat, India',
       link: 'https://maps.google.com'
     },
     { 
